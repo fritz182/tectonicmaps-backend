@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-multipart
+click
+gpxpy
+shapely
+pyproj
+numpy
+scipy
+trimesh
+requests
+pillow
+rasterio
+elevation
+mapbox-earcut
+networkx
