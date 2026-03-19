@@ -128,7 +128,9 @@ async def generate_model(gpx: UploadFile = File(...)):
         }
 
     except Exception as e:
-        shutil.rmtree(job_dir, ignore_errors=True)
+        import logging
+        logging.error(f"Job {job_id} failed: {e}")
+        # Keep job dir for debugging — don't delete
         raise HTTPException(500, f"Model generation failed: {str(e)}")
 
 
