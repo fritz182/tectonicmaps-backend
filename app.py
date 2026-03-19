@@ -5,15 +5,22 @@ and returns STL (for browser preview) + 3MF (for download/email).
 """
 
 import asyncio
+import json
+import logging
 import os
 import sys
 import uuid
 import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from email.message import EmailMessage
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import smtplib
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -145,6 +152,143 @@ async def download_3mf(job_id: str):
         media_type="application/vnd.ms-3mfdocument",
         filename=f"topography-{job_id}.3mf",
     )
+
+
+# --- Email config (set via environment variables on Hetzner) ---
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+NOTIFY_EMAIL = "hello@tectonicmaps.com"
+
+# --- Orders directory ---
+ORDERS_DIR = os.path.join(os.path.dirname(__file__), "orders")
+os.makedirs(ORDERS_DIR, exist_ok=True)
+
+
+def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: bytes | None):
+    """Send order notification email to hello@tectonicmaps.com."""
+    if not SMTP_HOST or not SMTP_USER:
+        logging.warning("SMTP not configured — skipping email. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.")
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = f"New Order: {order['map_title']} — {order['customer_name']}"
+    msg["From"] = SMTP_USER
+    msg["To"] = NOTIFY_EMAIL
+
+    body = f"""New TectonicMaps Order
+{'='*40}
+
+Map Title:     {order['map_title']}
+Job ID:        {order.get('job_id', 'N/A')}
+Price:         £{order['price']}
+Discount:      {order.get('discount_code') or 'None'}
+
+Customer:      {order['customer_name']}
+Email:         {order['customer_email']}
+
+Shipping Address:
+  {order['address']}
+  {order['city']}
+  {order['postcode']}
+  {order['country']}
+
+Stats:         {order.get('stats', 'N/A')}
+
+Order Date:    {order['order_date']}
+Order ID:      {order['order_id']}
+
+3MF Download:  https://api.tectonicmaps.com/api/download/{order.get('job_id', '')}
+"""
+    msg.set_content(body)
+
+    # Attach GPX file
+    if gpx_bytes:
+        msg.add_attachment(
+            gpx_bytes,
+            maintype="application",
+            subtype="gpx+xml",
+            filename=f"{order['map_title'].replace(' ', '_')}.gpx",
+        )
+
+    # Attach PDF file
+    if pdf_bytes:
+        msg.add_attachment(
+            pdf_bytes,
+            maintype="application",
+            subtype="pdf",
+            filename=f"{order['map_title'].replace(' ', '_')}_background.pdf",
+        )
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.send_message(msg)
+
+
+@app.post("/api/order")
+async def place_order(
+    job_id: str = Form(""),
+    map_title: str = Form("Custom Map"),
+    customer_name: str = Form(...),
+    customer_email: str = Form(...),
+    address: str = Form(...),
+    city: str = Form(...),
+    postcode: str = Form(...),
+    country: str = Form("United Kingdom"),
+    price: str = Form("45"),
+    discount_code: str = Form(""),
+    stats: str = Form(""),
+    gpx_file: Optional[UploadFile] = File(None),
+    pdf_file: Optional[UploadFile] = File(None),
+):
+    """Place an order — saves order details and emails notification."""
+    order_id = uuid.uuid4().hex[:12]
+    order = {
+        "order_id": order_id,
+        "job_id": job_id,
+        "map_title": map_title,
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "address": address,
+        "city": city,
+        "postcode": postcode,
+        "country": country,
+        "price": price,
+        "discount_code": discount_code,
+        "stats": stats,
+        "order_date": datetime.utcnow().isoformat(),
+        "status": "received",
+    }
+
+    # Save order to JSON file
+    order_path = os.path.join(ORDERS_DIR, f"{order_id}.json")
+    with open(order_path, "w") as f:
+        json.dump(order, f, indent=2)
+
+    # Read uploaded files
+    gpx_bytes = await gpx_file.read() if gpx_file else None
+    pdf_bytes = await pdf_file.read() if pdf_file else None
+
+    # Save GPX and PDF alongside order
+    if gpx_bytes:
+        with open(os.path.join(ORDERS_DIR, f"{order_id}.gpx"), "wb") as f:
+            f.write(gpx_bytes)
+    if pdf_bytes:
+        with open(os.path.join(ORDERS_DIR, f"{order_id}.pdf"), "wb") as f:
+            f.write(pdf_bytes)
+
+    # Send email notification (in background to not block response)
+    try:
+        await asyncio.get_event_loop().run_in_executor(
+            None, _send_order_email, order, gpx_bytes, pdf_bytes
+        )
+    except Exception as e:
+        logging.error(f"Failed to send order email for {order_id}: {e}")
+        # Don't fail the order if email fails — order is already saved
+
+    return {"order_id": order_id, "status": "received"}
 
 
 @app.get("/api/health")
