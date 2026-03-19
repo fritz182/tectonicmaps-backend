@@ -14,3 +14,4 @@ rasterio
 elevation
 mapbox-earcut
 networkx
+lxml
