@@ -177,6 +177,7 @@ def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: bytes | None):
     msg["From"] = SMTP_USER
     msg["To"] = NOTIFY_EMAIL
 
+    order_id = order['order_id']
     body = f"""New TectonicMaps Order
 {'='*40}
 
@@ -197,28 +198,22 @@ Shipping Address:
 Stats:         {order.get('stats', 'N/A')}
 
 Order Date:    {order['order_date']}
-Order ID:      {order['order_id']}
+Order ID:      {order_id}
 
-3MF Download:  https://api.tectonicmaps.com/api/download/{order.get('job_id', '')}
+Downloads:
+  3MF Model:   https://api.tectonicmaps.com/api/download/{order.get('job_id', '')}
+  GPX File:    https://api.tectonicmaps.com/api/order-file/{order_id}/gpx
+  PDF Background: https://api.tectonicmaps.com/api/order-file/{order_id}/pdf
 """
     msg.set_content(body)
 
-    # Attach GPX file
+    # Attach GPX file only (small enough for email)
     if gpx_bytes:
         msg.add_attachment(
             gpx_bytes,
             maintype="application",
             subtype="gpx+xml",
             filename=f"{order['map_title'].replace(' ', '_')}.gpx",
-        )
-
-    # Attach PDF file
-    if pdf_bytes:
-        msg.add_attachment(
-            pdf_bytes,
-            maintype="application",
-            subtype="pdf",
-            filename=f"{order['map_title'].replace(' ', '_')}_background.pdf",
         )
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
@@ -294,6 +289,19 @@ async def place_order(
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/order-file/{order_id}/{file_type}")
+async def download_order_file(order_id: str, file_type: str):
+    """Download GPX or PDF file for an order."""
+    if file_type not in ("gpx", "pdf"):
+        raise HTTPException(400, "Invalid file type — use 'gpx' or 'pdf'")
+    ext = ".gpx" if file_type == "gpx" else ".pdf"
+    media = "application/gpx+xml" if file_type == "gpx" else "application/pdf"
+    file_path = os.path.join(ORDERS_DIR, f"{order_id}{ext}")
+    if not os.path.exists(file_path):
+        raise HTTPException(404, "File not found")
+    return FileResponse(file_path, media_type=media, filename=f"order-{order_id}{ext}")
 
 
 # Frontend is served by Cloudflare Pages — no static file serving needed here
