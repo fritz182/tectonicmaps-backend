@@ -191,6 +191,7 @@ Email:         {order['customer_email']}
 
 Shipping Address:
   {order['address']}
+  {order.get('address_2') or ''}
   {order['city']}
   {order['postcode']}
   {order['country']}
@@ -229,6 +230,7 @@ async def place_order(
     customer_name: str = Form(...),
     customer_email: str = Form(...),
     address: str = Form(...),
+    address_2: str = Form(""),
     city: str = Form(...),
     postcode: str = Form(...),
     country: str = Form("United Kingdom"),
@@ -247,6 +249,7 @@ async def place_order(
         "customer_name": customer_name,
         "customer_email": customer_email,
         "address": address,
+        "address_2": address_2,
         "city": city,
         "postcode": postcode,
         "country": country,
