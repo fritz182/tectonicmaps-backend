@@ -233,36 +233,123 @@ def _send_customer_confirmation(order: dict):
     msg["From"] = SMTP_USER
     msg["To"] = order["customer_email"]
 
-    address_lines = order['address']
-    if order.get('address_2'):
-        address_lines += f"\n  {order['address_2']}"
+    address_line_2 = f"<br>{order['address_2']}" if order.get('address_2') else ""
 
-    body = f"""Hi {order['customer_name']},
+    # Plain text fallback
+    plain = f"""Hi {order['customer_name']},
 
 Thank you for your order! We've received it and will begin preparing your custom 3D map.
 
-Order Details
-{'='*40}
-
-Map:           {order['map_title']}
-Price:         £{order['price']}
-Order ID:      {order['order_id']}
+Map: {order['map_title']}
+Price: £{order['price']}
+Order ID: {order['order_id']}
 
 Delivery Address:
-  {address_lines}
-  {order['city']}
-  {order['postcode']}
-  {order['country']}
+{order['address']}
+{order.get('address_2') or ''}
+{order['city']}, {order['postcode']}
+{order['country']}
 
-What happens next?
 We'll email you when your map is ready and on its way.
 
-If you have any questions, reply to this email or contact us at hello@tectonicmaps.com.
-
-Thanks,
-TectonicMaps
+TectonicMaps — hello@tectonicmaps.com
 """
-    msg.set_content(body)
+    msg.set_content(plain)
+
+    # HTML version
+    html = f"""\
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f3f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3f0;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#AD4E38;padding:32px;text-align:center;">
+            <img src="https://tectonicmaps.com/assets/Logo/Logo%20TechtonicMaps%20WHITE.png" alt="TectonicMaps" width="180" style="max-width:180px;">
+          </td>
+        </tr>
+
+        <!-- Confirmation -->
+        <tr>
+          <td style="padding:40px 32px 24px;text-align:center;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#e8f5e9;margin:0 auto 16px;line-height:56px;font-size:28px;color:#2d7d3a;">&#10003;</div>
+            <h1 style="margin:0 0 8px;font-size:24px;color:#1a1a1a;font-weight:600;">Order Confirmed</h1>
+            <p style="margin:0;color:#666;font-size:15px;">Thanks {order['customer_name']}, we've received your order!</p>
+          </td>
+        </tr>
+
+        <!-- Order Details -->
+        <tr>
+          <td style="padding:0 32px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f7f5;border-radius:8px;padding:24px;">
+              <tr>
+                <td style="padding:24px;">
+                  <h2 style="margin:0 0 16px;font-size:16px;color:#AD4E38;text-transform:uppercase;letter-spacing:1px;">Order Details</h2>
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:8px 0;color:#666;font-size:14px;border-bottom:1px solid #e8e4e0;">Map</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">{order['map_title']}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:8px 0;color:#666;font-size:14px;border-bottom:1px solid #e8e4e0;">Price</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">&pound;{order['price']}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:8px 0;color:#666;font-size:14px;">Order ID</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;">{order['order_id']}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Delivery Address -->
+        <tr>
+          <td style="padding:0 32px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f7f5;border-radius:8px;">
+              <tr>
+                <td style="padding:24px;">
+                  <h2 style="margin:0 0 12px;font-size:16px;color:#AD4E38;text-transform:uppercase;letter-spacing:1px;">Delivery Address</h2>
+                  <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.6;">
+                    {order['address']}{address_line_2}<br>
+                    {order['city']}, {order['postcode']}<br>
+                    {order['country']}
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- What's Next -->
+        <tr>
+          <td style="padding:0 32px 40px;text-align:center;">
+            <h2 style="margin:0 0 8px;font-size:18px;color:#1a1a1a;">What happens next?</h2>
+            <p style="margin:0;color:#666;font-size:14px;line-height:1.6;">We'll begin preparing your custom 3D map and email you when it's ready and on its way.</p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f0ece8;padding:24px 32px;text-align:center;">
+            <p style="margin:0 0 4px;color:#999;font-size:13px;">Questions? Reply to this email or contact us at</p>
+            <a href="mailto:hello@tectonicmaps.com" style="color:#AD4E38;font-size:13px;text-decoration:none;">hello@tectonicmaps.com</a>
+            <p style="margin:16px 0 0;color:#ccc;font-size:12px;">TectonicMaps &mdash; Custom 3D Terrain Maps</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    msg.add_alternative(html, subtype="html")
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
         server.starttls()
