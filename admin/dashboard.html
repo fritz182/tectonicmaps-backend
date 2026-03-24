@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Dashboard — TectonicMaps</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f3f0;
+    color: #1a1a1a;
+    font-size: 14px;
+  }
+
+  /* Header */
+  .header {
+    background: #AD4E38;
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .tab-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .tab-btn.active { background: rgba(255,255,255,0.3); }
+  .tab-btn:hover { background: rgba(255,255,255,0.25); }
+  .logout-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px;
+    flex-wrap: wrap;
+  }
+  .stat-badge {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .stat-badge:hover { transform: scale(1.05); }
+  .stat-badge .count { font-weight: 700; margin-right: 4px; }
+  .stat-received { background: #dbeafe; color: #1e40af; }
+  .stat-printing { background: #fef3c7; color: #92400e; }
+  .stat-packaging { background: #fce7f3; color: #9d174d; }
+  .stat-shipped { background: #e0e7ff; color: #3730a3; }
+  .stat-delivered { background: #d1fae5; color: #065f46; }
+  .stat-complete { background: #e5e7eb; color: #374151; }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    padding: 0 24px 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar select, .filter-bar input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    background: #fff;
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color: #AD4E38; }
+  .filter-bar input { flex: 1; min-width: 200px; }
+  .sort-btn {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .sort-btn:hover { background: #f9f7f5; }
+
+  /* Main content */
+  .content { padding: 0 24px 24px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Table */
+  .order-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .order-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    background: #faf8f6;
+    border-bottom: 1px solid #eee;
+  }
+  .order-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0ece8;
+  }
+  .order-table tr.clickable { cursor: pointer; }
+  .order-table tr.clickable:hover { background: #faf8f6; }
+  .status-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .status-received { background: #dbeafe; color: #1e40af; }
+  .status-printing { background: #fef3c7; color: #92400e; }
+  .status-packaging { background: #fce7f3; color: #9d174d; }
+  .status-shipped { background: #e0e7ff; color: #3730a3; }
+  .status-delivered { background: #d1fae5; color: #065f46; }
+  .status-complete { background: #e5e7eb; color: #374151; }
+
+  /* Detail panel */
+  .detail-panel {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    display: none;
+  }
+  .detail-panel.open { display: block; }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .detail-section h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #AD4E38;
+    margin-bottom: 12px;
+  }
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0ece8;
+    font-size: 13px;
+  }
+  .detail-row .label { color: #888; }
+  .detail-row .value { font-weight: 500; text-align: right; }
+
+  /* Status update */
+  .status-update {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .status-update .field { display: flex; flex-direction: column; gap: 4px; }
+  .status-update label { font-size: 12px; color: #888; }
+  .status-update select, .status-update input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .update-btn {
+    padding: 8px 18px;
+    background: #AD4E38;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .update-btn:hover { background: #943f2e; }
+  .update-btn:disabled { background: #ccc; }
+
+  /* Status history */
+  .history-list {
+    list-style: none;
+    margin-top: 12px;
+  }
+  .history-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid #f0ece8;
+    font-size: 13px;
+    display: flex;
+    gap: 12px;
+  }
+  .history-time { color: #888; white-space: nowrap; }
+  .history-note { color: #666; font-style: italic; }
+
+  /* Downloads */
+  .file-downloads {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .dl-btn {
+    padding: 6px 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: none;
+    color: #1a1a1a;
+  }
+  .dl-btn:hover { background: #f9f7f5; }
+  .dl-btn.disabled { opacity: 0.4; pointer-events: none; }
+
+  /* Retention tab */
+  .retention-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .retention-actions label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .anon-btn {
+    padding: 8px 16px;
+    background: #f59e0b;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .anon-btn:hover { background: #d97706; }
+  .anon-btn:disabled { background: #ccc; }
+  .delete-btn {
+    padding: 8px 16px;
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .delete-btn:hover { background: #b91c1c; }
+  .delete-btn:disabled { background: #ccc; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+  }
+  .empty-state p { font-size: 15px; }
+
+  .anonymised-tag {
+    font-size: 11px;
+    background: #fef3c7;
+    color: #92400e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>TectonicMaps Admin</h1>
+  <div class="header-right">
+    <button class="tab-btn active" data-tab="orders">Orders</button>
+    <button class="tab-btn" data-tab="retention">Retention</button>
+    <form method="POST" action="/admin/logout" style="margin:0;">
+      <button type="submit" class="logout-btn">Logout</button>
+    </form>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar" id="statsBar"></div>
+
+<!-- Filters -->
+<div class="filter-bar" id="filterBar">
+  <select id="statusFilter">
+    <option value="all">All statuses</option>
+    <option value="received">Received</option>
+    <option value="printing">Printing</option>
+    <option value="packaging">Packaging</option>
+    <option value="shipped">Shipped</option>
+    <option value="delivered">Delivered</option>
+    <option value="complete">Complete</option>
+  </select>
+  <input type="text" id="searchBox" placeholder="Search by name, email, title, or order ID…">
+  <button class="sort-btn" id="sortBtn" title="Toggle sort order">Newest first</button>
+</div>
+
+<div class="content">
+  <!-- Orders tab -->
+  <div class="tab-panel active" id="ordersTab">
+    <table class="order-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Order ID</th>
+          <th>Map Title</th>
+          <th>Customer</th>
+          <th>Status</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody id="orderBody"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <p>No orders found</p>
+    </div>
+    <div class="detail-panel" id="detailPanel"></div>
+  </div>
+
+  <!-- Retention tab -->
+  <div class="tab-panel" id="retentionTab">
+    <div class="retention-actions">
+      <label><input type="checkbox" id="selectAll"> Select all</label>
+      <button class="anon-btn" id="anonymiseBtn" disabled>Anonymise Selected</button>
+      <button class="delete-btn" id="deleteBtn" disabled>Delete Selected</button>
+      <span id="retentionInfo" style="color:#888;font-size:13px;margin-left:auto;"></span>
+    </div>
+    <table class="order-table">
+      <thead>
+        <tr>
+          <th style="width:40px;"></th>
+          <th>Completed</th>
+          <th>Order ID</th>
+          <th>Map Title</th>
+          <th>Customer</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody id="retentionBody"></tbody>
+    </table>
+    <div class="empty-state" id="retentionEmpty" style="display:none;">
+      <p>No orders past the retention window</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  orders: [],
+  sort: 'newest',
+  selectedOrderId: null,
+};
+
+// --- Tabs ---
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+    const isOrders = btn.dataset.tab === 'orders';
+    document.getElementById('filterBar').style.display = isOrders ? '' : 'none';
+    document.getElementById('statsBar').style.display = isOrders ? '' : 'none';
+    if (btn.dataset.tab === 'retention') loadRetention();
+  });
+});
+
+// --- Sort toggle ---
+const sortBtn = document.getElementById('sortBtn');
+sortBtn.addEventListener('click', () => {
+  state.sort = state.sort === 'newest' ? 'oldest' : 'newest';
+  sortBtn.textContent = state.sort === 'newest' ? 'Newest first' : 'Oldest first';
+  loadOrders();
+});
+
+// --- Filters ---
+const statusFilter = document.getElementById('statusFilter');
+const searchBox = document.getElementById('searchBox');
+statusFilter.addEventListener('change', loadOrders);
+let searchTimer;
+searchBox.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadOrders, 300);
+});
+
+// --- Load orders ---
+async function loadOrders() {
+  const params = new URLSearchParams();
+  params.set('sort', state.sort);
+  if (statusFilter.value !== 'all') params.set('status', statusFilter.value);
+  if (searchBox.value.trim()) params.set('search', searchBox.value.trim());
+
+  const resp = await fetch('/admin/api/orders?' + params);
+  if (resp.status === 401) { window.location.href = '/admin/login'; return; }
+  const data = await resp.json();
+  state.orders = data.orders;
+  renderOrders();
+  renderStats();
+}
+
+function renderStats() {
+  const counts = {};
+  const allOrders = state.orders;
+  // Reload unfiltered for stats
+  fetch('/admin/api/orders?sort=newest').then(r => r.json()).then(data => {
+    const all = data.orders;
+    ['received','printing','packaging','shipped','delivered','complete'].forEach(s => {
+      counts[s] = all.filter(o => o.status === s).length;
+    });
+    const bar = document.getElementById('statsBar');
+    bar.innerHTML = '';
+    ['received','printing','packaging','shipped','delivered','complete'].forEach(s => {
+      const badge = document.createElement('div');
+      badge.className = `stat-badge stat-${s}`;
+      badge.innerHTML = `<span class="count">${counts[s]}</span>${s}`;
+      badge.addEventListener('click', () => {
+        statusFilter.value = counts[s] > 0 ? s : 'all';
+        loadOrders();
+      });
+      bar.appendChild(badge);
+    });
+  });
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderOrders() {
+  const body = document.getElementById('orderBody');
+  const empty = document.getElementById('emptyState');
+  if (state.orders.length === 0) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  body.innerHTML = state.orders.map(o => `
+    <tr class="clickable" data-id="${o.order_id}">
+      <td>${formatDate(o.order_date)}</td>
+      <td style="font-family:monospace;font-size:12px;">${o.order_id}${o.anonymised ? '<span class="anonymised-tag">anon</span>' : ''}</td>
+      <td>${esc(o.map_title)}</td>
+      <td>${esc(o.customer_name)}</td>
+      <td><span class="status-pill status-${o.status}">${o.status}</span></td>
+      <td>&pound;${esc(o.price)}</td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('tr.clickable').forEach(row => {
+    row.addEventListener('click', () => openDetail(row.dataset.id));
+  });
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+// --- Detail panel ---
+async function openDetail(orderId) {
+  state.selectedOrderId = orderId;
+  const resp = await fetch(`/admin/api/orders/${orderId}`);
+  if (!resp.ok) return;
+  const order = await resp.json();
+  const panel = document.getElementById('detailPanel');
+
+  const statuses = ['received','printing','packaging','shipped','delivered','complete'];
+  const statusOptions = statuses.map(s =>
+    `<option value="${s}" ${s === order.status ? 'selected' : ''}>${s}</option>`
+  ).join('');
+
+  const history = (order.status_history || []).map(h => `
+    <li>
+      <span class="history-time">${formatDate(h.timestamp)}</span>
+      <span class="status-pill status-${h.status}">${h.status}</span>
+      ${h.note ? `<span class="history-note">${esc(h.note)}</span>` : ''}
+    </li>
+  `).join('') || '<li style="color:#888;">No history yet</li>';
+
+  const files = order.files || {};
+
+  panel.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-section">
+        <h3>Order Details</h3>
+        <div class="detail-row"><span class="label">Order ID</span><span class="value" style="font-family:monospace;">${order.order_id}</span></div>
+        <div class="detail-row"><span class="label">Map Title</span><span class="value">${esc(order.map_title)}</span></div>
+        <div class="detail-row"><span class="label">Job ID</span><span class="value" style="font-family:monospace;">${order.job_id || '—'}</span></div>
+        <div class="detail-row"><span class="label">Price</span><span class="value">&pound;${esc(order.price)}</span></div>
+        <div class="detail-row"><span class="label">Discount</span><span class="value">${esc(order.discount_code) || '—'}</span></div>
+        <div class="detail-row"><span class="label">Stats</span><span class="value">${esc(order.stats) || '—'}</span></div>
+        <div class="detail-row"><span class="label">Order Date</span><span class="value">${formatDate(order.order_date)}</span></div>
+        <div class="detail-row"><span class="label">Tracking</span><span class="value">${esc(order.tracking_number) || '—'}</span></div>
+
+        <h3 style="margin-top:20px;">Files</h3>
+        <div class="file-downloads">
+          <a class="dl-btn ${files.gpx ? '' : 'disabled'}" href="/admin/api/orders/${order.order_id}/download/gpx">GPX</a>
+          <a class="dl-btn ${files.pdf ? '' : 'disabled'}" href="/admin/api/orders/${order.order_id}/download/pdf">PDF</a>
+          <a class="dl-btn ${files.threemf ? '' : 'disabled'}" href="/admin/api/orders/${order.order_id}/download/3mf">3MF</a>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h3>Customer</h3>
+        <div class="detail-row"><span class="label">Name</span><span class="value">${esc(order.customer_name)}</span></div>
+        <div class="detail-row"><span class="label">Email</span><span class="value">${esc(order.customer_email)}</span></div>
+        <div class="detail-row"><span class="label">Address</span><span class="value">${esc(order.address)}</span></div>
+        ${order.address_2 ? `<div class="detail-row"><span class="label"></span><span class="value">${esc(order.address_2)}</span></div>` : ''}
+        <div class="detail-row"><span class="label">City</span><span class="value">${esc(order.city)}</span></div>
+        <div class="detail-row"><span class="label">Postcode</span><span class="value">${esc(order.postcode)}</span></div>
+        <div class="detail-row"><span class="label">Country</span><span class="value">${esc(order.country)}</span></div>
+
+        <h3 style="margin-top:20px;">Status History</h3>
+        <ul class="history-list">${history}</ul>
+      </div>
+    </div>
+    <div class="status-update">
+      <div class="field">
+        <label>Update Status</label>
+        <select id="newStatus">${statusOptions}</select>
+      </div>
+      <div class="field">
+        <label>Tracking Number</label>
+        <input type="text" id="trackingNum" value="${esc(order.tracking_number) || ''}" placeholder="Optional">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>Note</label>
+        <input type="text" id="statusNote" placeholder="Optional note…" style="width:100%;">
+      </div>
+      <button class="update-btn" id="updateStatusBtn">Update</button>
+    </div>
+  `;
+  panel.classList.add('open');
+
+  document.getElementById('updateStatusBtn').addEventListener('click', updateStatus);
+}
+
+async function updateStatus() {
+  const btn = document.getElementById('updateStatusBtn');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  const body = {
+    status: document.getElementById('newStatus').value,
+    note: document.getElementById('statusNote').value,
+  };
+  const tracking = document.getElementById('trackingNum').value.trim();
+  if (tracking) body.tracking_number = tracking;
+
+  const resp = await fetch(`/admin/api/orders/${state.selectedOrderId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (resp.ok) {
+    await loadOrders();
+    await openDetail(state.selectedOrderId);
+  } else {
+    alert('Failed to update status');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Update';
+}
+
+// --- Retention tab ---
+let retentionOrders = [];
+
+async function loadRetention() {
+  const resp = await fetch('/admin/api/retention');
+  if (resp.status === 401) { window.location.href = '/admin/login'; return; }
+  const data = await resp.json();
+  retentionOrders = data.orders;
+  document.getElementById('retentionInfo').textContent =
+    `Retention window: ${data.retention_days} days`;
+  renderRetention();
+}
+
+function renderRetention() {
+  const body = document.getElementById('retentionBody');
+  const empty = document.getElementById('retentionEmpty');
+  if (retentionOrders.length === 0) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  body.innerHTML = retentionOrders.map(o => `
+    <tr>
+      <td><input type="checkbox" class="ret-check" data-id="${o.order_id}"></td>
+      <td>${formatDate(o.completed_date || o.order_date)}</td>
+      <td style="font-family:monospace;font-size:12px;">${o.order_id}</td>
+      <td>${esc(o.map_title)}</td>
+      <td>${esc(o.customer_name)}</td>
+      <td>&pound;${esc(o.price)}</td>
+    </tr>
+  `).join('');
+  updateRetentionButtons();
+
+  body.querySelectorAll('.ret-check').forEach(cb => {
+    cb.addEventListener('change', updateRetentionButtons);
+  });
+}
+
+document.getElementById('selectAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.ret-check').forEach(cb => cb.checked = e.target.checked);
+  updateRetentionButtons();
+});
+
+function getSelectedRetentionIds() {
+  return Array.from(document.querySelectorAll('.ret-check:checked')).map(c => c.dataset.id);
+}
+
+function updateRetentionButtons() {
+  const ids = getSelectedRetentionIds();
+  document.getElementById('anonymiseBtn').disabled = ids.length === 0;
+  document.getElementById('deleteBtn').disabled = ids.length === 0;
+}
+
+document.getElementById('anonymiseBtn').addEventListener('click', async () => {
+  const ids = getSelectedRetentionIds();
+  if (!ids.length) return;
+  if (!confirm(`Anonymise ${ids.length} order(s)? This replaces personal data and deletes GPX/PDF files.`)) return;
+  const resp = await fetch('/admin/api/retention/anonymise', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: ids }),
+  });
+  if (resp.ok) loadRetention();
+  else alert('Anonymisation failed');
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+  const ids = getSelectedRetentionIds();
+  if (!ids.length) return;
+  if (!confirm(`DELETE ${ids.length} order(s) permanently? This cannot be undone.`)) return;
+  const resp = await fetch('/admin/api/retention/delete', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: ids }),
+  });
+  if (resp.ok) loadRetention();
+  else alert('Deletion failed');
+});
+
+// --- Init ---
+loadOrders();
+</script>
+</body>
+</html>

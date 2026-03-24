@@ -25,6 +25,8 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from admin_routes import admin_router
+
 # Add route2tile package to Python path
 # On Hetzner: /opt/tectonicmaps/route2tile  (set via ROUTE2TILE_DIR env var)
 # Locally:    ../../Mapping code/route2tile-main
@@ -50,6 +52,9 @@ app.add_middleware(
 # Directory for generated output files
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Admin dashboard
+app.include_router(admin_router)
 
 # Serve generated files statically
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
@@ -166,7 +171,7 @@ ORDERS_DIR = os.path.join(os.path.dirname(__file__), "orders")
 os.makedirs(ORDERS_DIR, exist_ok=True)
 
 
-def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: bytes | None):
+def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: Optional[bytes]):
     """Send order notification email to hello@tectonicmaps.com."""
     if not SMTP_HOST or not SMTP_USER:
         logging.warning("SMTP not configured — skipping email. Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars.")
