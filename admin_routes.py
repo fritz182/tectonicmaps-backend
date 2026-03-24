@@ -3,9 +3,11 @@ Admin dashboard routes for order management.
 Cookie-based auth with HMAC-signed tokens.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import shutil
@@ -21,7 +23,9 @@ admin_router = APIRouter(prefix="/admin")
 
 # --- Config ---
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "change-me-in-production")
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
+if not ADMIN_SECRET:
+    logging.warning("ADMIN_SECRET not set — admin dashboard will be disabled")
 COOKIE_NAME = "admin_token"
 COOKIE_MAX_AGE = 86400  # 24 hours
 RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", "90"))
@@ -53,7 +57,7 @@ def _make_cookie_value() -> str:
 
 def _verify_cookie(value: str) -> bool:
     """Verify cookie signature and expiry."""
-    if not value or "." not in value:
+    if not ADMIN_SECRET or not value or "." not in value:
         return False
     ts, sig = value.rsplit(".", 1)
     if not hmac.compare_digest(sig, _sign_token(ts)):
@@ -133,10 +137,10 @@ async def login_page():
 @admin_router.post("/login")
 async def login(response: Response, password: str = Form(...)):
     """Validate password and set auth cookie."""
-    if not ADMIN_PASSWORD:
-        raise HTTPException(500, "ADMIN_PASSWORD not configured")
+    if not ADMIN_PASSWORD or not ADMIN_SECRET:
+        raise HTTPException(500, "Admin not configured — set ADMIN_PASSWORD and ADMIN_SECRET env vars")
     if not hmac.compare_digest(password, ADMIN_PASSWORD):
-        time.sleep(1)
+        await asyncio.sleep(1)  # Non-blocking delay to slow brute-force
         raise HTTPException(401, "Invalid password")
     cookie_val = _make_cookie_value()
     resp = RedirectResponse(url="/admin/", status_code=303)
@@ -147,6 +151,7 @@ async def login(response: Response, password: str = Form(...)):
         httponly=True,
         secure=True,
         samesite="strict",
+        path="/admin/",
     )
     return resp
 
@@ -155,7 +160,7 @@ async def login(response: Response, password: str = Form(...)):
 async def logout():
     """Clear auth cookie."""
     resp = RedirectResponse(url="/admin/login", status_code=303)
-    resp.delete_cookie(COOKIE_NAME)
+    resp.delete_cookie(COOKIE_NAME, path="/admin/")
     return resp
 
 
@@ -273,8 +278,8 @@ async def download_file(
     elif file_type == "3mf":
         order = _load_order(order_id)
         job_id = order.get("job_id", "")
-        if not job_id:
-            raise HTTPException(404, "No job ID associated with this order")
+        if not job_id or not re.match(r"^[0-9a-f]{12}$", job_id):
+            raise HTTPException(404, "No valid job ID associated with this order")
         path = os.path.join(OUTPUT_DIR, job_id, "model.3mf")
         media = "application/vnd.ms-3mfdocument"
         fname = f"order-{order_id}.3mf"
@@ -361,8 +366,8 @@ async def delete_orders(request: Request, admin_token: Optional[str] = Cookie(No
                 if os.path.exists(fpath):
                     os.remove(fpath)
 
-            # Remove output directory if job_id is known
-            if job_id:
+            # Remove output directory if job_id is known and valid
+            if job_id and re.match(r"^[0-9a-f]{12}$", job_id):
                 job_dir = os.path.join(OUTPUT_DIR, job_id)
                 if os.path.isdir(job_dir):
                     shutil.rmtree(job_dir)

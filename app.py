@@ -149,6 +149,9 @@ async def generate_model(gpx: UploadFile = File(...)):
 @app.get("/api/download/{job_id}")
 async def download_3mf(job_id: str):
     """Download the generated 3MF file."""
+    import re
+    if not re.match(r"^[0-9a-f]{12}$", job_id):
+        raise HTTPException(400, "Invalid job ID")
     threemf_path = os.path.join(OUTPUT_DIR, job_id, "model.3mf")
     if not os.path.exists(threemf_path):
         raise HTTPException(404, "File not found — it may have expired")
@@ -438,6 +441,9 @@ async def health():
 @app.get("/api/order-file/{order_id}/{file_type}")
 async def download_order_file(order_id: str, file_type: str):
     """Download GPX or PDF file for an order."""
+    import re
+    if not re.match(r"^[0-9a-f]{12}$", order_id):
+        raise HTTPException(400, "Invalid order ID")
     if file_type not in ("gpx", "pdf"):
         raise HTTPException(400, "Invalid file type — use 'gpx' or 'pdf'")
     ext = ".gpx" if file_type == "gpx" else ".pdf"
