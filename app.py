@@ -223,6 +223,53 @@ Downloads:
         server.send_message(msg)
 
 
+def _send_customer_confirmation(order: dict):
+    """Send order confirmation email to the customer."""
+    if not SMTP_HOST or not SMTP_USER:
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = f"Order Confirmed — {order['map_title']} | TectonicMaps"
+    msg["From"] = SMTP_USER
+    msg["To"] = order["customer_email"]
+
+    address_lines = order['address']
+    if order.get('address_2'):
+        address_lines += f"\n  {order['address_2']}"
+
+    body = f"""Hi {order['customer_name']},
+
+Thank you for your order! We've received it and will begin preparing your custom 3D map.
+
+Order Details
+{'='*40}
+
+Map:           {order['map_title']}
+Price:         £{order['price']}
+Order ID:      {order['order_id']}
+
+Delivery Address:
+  {address_lines}
+  {order['city']}
+  {order['postcode']}
+  {order['country']}
+
+What happens next?
+We'll email you when your map is ready and on its way.
+
+If you have any questions, reply to this email or contact us at hello@tectonicmaps.com.
+
+Thanks,
+TectonicMaps
+"""
+    msg.set_content(body)
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.send_message(msg)
+
+
 @app.post("/api/order")
 async def place_order(
     job_id: str = Form(""),
@@ -277,13 +324,15 @@ async def place_order(
         with open(os.path.join(ORDERS_DIR, f"{order_id}.pdf"), "wb") as f:
             f.write(pdf_bytes)
 
-    # Send email notification (in background to not block response)
+    # Send email notifications (in background to not block response)
+    def _send_all_emails():
+        _send_order_email(order, gpx_bytes, pdf_bytes)
+        _send_customer_confirmation(order)
+
     try:
-        await asyncio.get_event_loop().run_in_executor(
-            None, _send_order_email, order, gpx_bytes, pdf_bytes
-        )
+        await asyncio.get_event_loop().run_in_executor(None, _send_all_emails)
     except Exception as e:
-        logging.error(f"Failed to send order email for {order_id}: {e}")
+        logging.error(f"Failed to send emails for {order_id}: {e}")
         # Don't fail the order if email fails — order is already saved
 
     return {"order_id": order_id, "status": "received"}
