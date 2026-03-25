@@ -5,9 +5,11 @@ and returns STL (for browser preview) + 3MF (for download/email).
 """
 
 import asyncio
+import html
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 import shutil
@@ -108,7 +110,7 @@ async def generate_model(gpx: UploadFile = File(...)):
     """
     Upload a GPX file -> run route2tile -> return URLs for STL preview + 3MF download.
     """
-    if not gpx.filename.lower().endswith(".gpx"):
+    if not gpx.filename or not gpx.filename.lower().endswith(".gpx"):
         raise HTTPException(400, "File must be a .gpx file")
 
     content = await gpx.read()
@@ -140,16 +142,14 @@ async def generate_model(gpx: UploadFile = File(...)):
         }
 
     except Exception as e:
-        import logging
         logging.error(f"Job {job_id} failed: {e}")
         # Keep job dir for debugging — don't delete
-        raise HTTPException(500, f"Model generation failed: {str(e)}")
+        raise HTTPException(500, "Model generation failed — please try again")
 
 
 @app.get("/api/download/{job_id}")
 async def download_3mf(job_id: str):
     """Download the generated 3MF file."""
-    import re
     if not re.match(r"^[0-9a-f]{12}$", job_id):
         raise HTTPException(400, "Invalid job ID")
     threemf_path = os.path.join(OUTPUT_DIR, job_id, "model.3mf")
@@ -174,6 +174,21 @@ ORDERS_DIR = os.path.join(os.path.dirname(__file__), "orders")
 os.makedirs(ORDERS_DIR, exist_ok=True)
 
 
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+MAX_FIELD_LEN = 500
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB per file
+
+
+def _sanitize_header(value: str) -> str:
+    """Strip newlines and carriage returns to prevent email header injection."""
+    return value.replace("\r", "").replace("\n", "").strip()
+
+
+def _html_esc(value: str) -> str:
+    """Escape user content for safe HTML email embedding."""
+    return html.escape(str(value), quote=True)
+
+
 def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: Optional[bytes]):
     """Send order notification email to hello@tectonicmaps.com."""
     if not SMTP_HOST or not SMTP_USER:
@@ -181,7 +196,7 @@ def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: Optional[bytes])
         return
 
     msg = EmailMessage()
-    msg["Subject"] = f"New Order: {order['map_title']} — {order['customer_name']}"
+    msg["Subject"] = _sanitize_header(f"New Order: {order['map_title']} — {order['customer_name']}")
     msg["From"] = SMTP_USER
     msg["To"] = NOTIFY_EMAIL
 
@@ -237,11 +252,21 @@ def _send_customer_confirmation(order: dict):
         return
 
     msg = EmailMessage()
-    msg["Subject"] = f"Order Confirmed — {order['map_title']} | TectonicMaps"
+    msg["Subject"] = _sanitize_header(f"Order Confirmed — {order['map_title']} | TectonicMaps")
     msg["From"] = SMTP_USER
-    msg["To"] = order["customer_email"]
+    msg["To"] = _sanitize_header(order["customer_email"])
 
-    address_line_2 = f"<br>{order['address_2']}" if order.get('address_2') else ""
+    address_line_2 = f"<br>{_html_esc(order['address_2'])}" if order.get('address_2') else ""
+
+    # HTML-escaped values for the template
+    h_name = _html_esc(order['customer_name'])
+    h_title = _html_esc(order['map_title'])
+    h_price = _html_esc(order['price'])
+    h_order_id = _html_esc(order['order_id'])
+    h_address = _html_esc(order['address'])
+    h_city = _html_esc(order['city'])
+    h_postcode = _html_esc(order['postcode'])
+    h_country = _html_esc(order['country'])
 
     # Plain text fallback
     plain = f"""Hi {order['customer_name']},
@@ -286,7 +311,7 @@ TectonicMaps — hello@tectonicmaps.com
           <td style="padding:40px 32px 24px;text-align:center;">
             <div style="width:56px;height:56px;border-radius:50%;background:#e8f5e9;margin:0 auto 16px;line-height:56px;font-size:28px;color:#2d7d3a;">&#10003;</div>
             <h1 style="margin:0 0 8px;font-size:24px;color:#1a1a1a;font-weight:600;">Order Confirmed</h1>
-            <p style="margin:0;color:#666;font-size:15px;">Thanks {order['customer_name']}, we've received your order!</p>
+            <p style="margin:0;color:#666;font-size:15px;">Thanks {h_name}, we've received your order!</p>
           </td>
         </tr>
 
@@ -300,15 +325,15 @@ TectonicMaps — hello@tectonicmaps.com
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                       <td style="padding:8px 0;color:#666;font-size:14px;border-bottom:1px solid #e8e4e0;">Map</td>
-                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">{order['map_title']}</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">{h_title}</td>
                     </tr>
                     <tr>
                       <td style="padding:8px 0;color:#666;font-size:14px;border-bottom:1px solid #e8e4e0;">Price</td>
-                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">&pound;{order['price']}</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;border-bottom:1px solid #e8e4e0;">&pound;{h_price}</td>
                     </tr>
                     <tr>
                       <td style="padding:8px 0;color:#666;font-size:14px;">Order ID</td>
-                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;">{order['order_id']}</td>
+                      <td style="padding:8px 0;color:#1a1a1a;font-size:14px;text-align:right;font-weight:500;">{h_order_id}</td>
                     </tr>
                   </table>
                 </td>
@@ -325,9 +350,9 @@ TectonicMaps — hello@tectonicmaps.com
                 <td style="padding:24px;">
                   <h2 style="margin:0 0 12px;font-size:16px;color:#AD4E38;text-transform:uppercase;letter-spacing:1px;">Delivery Address</h2>
                   <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.6;">
-                    {order['address']}{address_line_2}<br>
-                    {order['city']}, {order['postcode']}<br>
-                    {order['country']}
+                    {h_address}{address_line_2}<br>
+                    {h_city}, {h_postcode}<br>
+                    {h_country}
                   </p>
                 </td>
               </tr>
@@ -383,6 +408,27 @@ async def place_order(
     pdf_file: Optional[UploadFile] = File(None),
 ):
     """Place an order — saves order details and emails notification."""
+    # Validate email format
+    if not EMAIL_RE.match(customer_email):
+        raise HTTPException(400, "Invalid email address")
+
+    # Enforce field length limits
+    for field_name, field_val in [
+        ("customer_name", customer_name), ("map_title", map_title),
+        ("address", address), ("city", city), ("postcode", postcode),
+        ("country", country), ("discount_code", discount_code),
+    ]:
+        if len(field_val) > MAX_FIELD_LEN:
+            raise HTTPException(400, f"{field_name} too long (max {MAX_FIELD_LEN} chars)")
+
+    # Validate price is a reasonable number
+    try:
+        price_num = float(price)
+        if price_num < 0 or price_num > 10000:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, "Invalid price")
+
     order_id = uuid.uuid4().hex[:12]
     order = {
         "order_id": order_id,
@@ -407,9 +453,17 @@ async def place_order(
     with open(order_path, "w") as f:
         json.dump(order, f, indent=2)
 
-    # Read uploaded files
-    gpx_bytes = await gpx_file.read() if gpx_file else None
-    pdf_bytes = await pdf_file.read() if pdf_file else None
+    # Read uploaded files with size limits
+    gpx_bytes = None
+    if gpx_file:
+        gpx_bytes = await gpx_file.read()
+        if len(gpx_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(400, "GPX file too large (max 20MB)")
+    pdf_bytes = None
+    if pdf_file:
+        pdf_bytes = await pdf_file.read()
+        if len(pdf_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(400, "PDF file too large (max 20MB)")
 
     # Save GPX and PDF alongside order
     if gpx_bytes:
@@ -441,7 +495,6 @@ async def health():
 @app.get("/api/order-file/{order_id}/{file_type}")
 async def download_order_file(order_id: str, file_type: str):
     """Download GPX or PDF file for an order."""
-    import re
     if not re.match(r"^[0-9a-f]{12}$", order_id):
         raise HTTPException(400, "Invalid order ID")
     if file_type not in ("gpx", "pdf"):
