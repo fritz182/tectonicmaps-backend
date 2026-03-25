@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from admin_routes import admin_router
+from paypal_routes import paypal_router
 
 # Add route2tile package to Python path
 # On Hetzner: /opt/tectonicmaps/route2tile  (set via ROUTE2TILE_DIR env var)
@@ -57,6 +58,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Admin dashboard
 app.include_router(admin_router)
+
+# PayPal payment routes
+app.include_router(paypal_router)
 
 # Serve generated files statically
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
@@ -404,6 +408,7 @@ async def place_order(
     price: str = Form("45"),
     discount_code: str = Form(""),
     stats: str = Form(""),
+    paypal_capture_id: str = Form(""),
     gpx_file: Optional[UploadFile] = File(None),
     pdf_file: Optional[UploadFile] = File(None),
 ):
@@ -444,6 +449,7 @@ async def place_order(
         "price": price,
         "discount_code": discount_code,
         "stats": stats,
+        "paypal_capture_id": paypal_capture_id,
         "order_date": datetime.utcnow().isoformat(),
         "status": "received",
     }
@@ -469,6 +475,13 @@ async def place_order(
     if gpx_bytes:
         with open(os.path.join(ORDERS_DIR, f"{order_id}.gpx"), "wb") as f:
             f.write(gpx_bytes)
+    elif job_id and re.match(r"^[0-9a-f]{12}$", job_id):
+        # Copy GPX from the job output directory if not uploaded directly
+        job_gpx = os.path.join(OUTPUT_DIR, job_id, "input.gpx")
+        if os.path.exists(job_gpx):
+            shutil.copy2(job_gpx, os.path.join(ORDERS_DIR, f"{order_id}.gpx"))
+            with open(job_gpx, "rb") as f:
+                gpx_bytes = f.read()
     if pdf_bytes:
         with open(os.path.join(ORDERS_DIR, f"{order_id}.pdf"), "wb") as f:
             f.write(pdf_bytes)
