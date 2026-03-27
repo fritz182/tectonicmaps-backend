@@ -112,6 +112,7 @@ async def create_paypal_order(request: Request):
     body = await request.json()
     item_count = int(body.get("item_count", 1))
     discount_code = body.get("discount_code", "")
+    shipping = body.get("shipping", {})
 
     if len(discount_code) > 50:
         raise HTTPException(400, "Invalid discount code")
@@ -119,33 +120,53 @@ async def create_paypal_order(request: Request):
     pricing = _calculate_price(item_count, discount_code)
     token = _get_access_token()
 
-    paypal_order = {
-        "intent": "CAPTURE",
-        "purchase_units": [{
-            "amount": {
-                "currency_code": CURRENCY,
-                "value": f"{pricing['total']:.2f}",
-                "breakdown": {
-                    "item_total": {
-                        "currency_code": CURRENCY,
-                        "value": f"{pricing['subtotal']:.2f}",
-                    },
-                    "discount": {
-                        "currency_code": CURRENCY,
-                        "value": f"{pricing['discount_amount']:.2f}",
-                    },
+    purchase_unit = {
+        "amount": {
+            "currency_code": CURRENCY,
+            "value": f"{pricing['total']:.2f}",
+            "breakdown": {
+                "item_total": {
+                    "currency_code": CURRENCY,
+                    "value": f"{pricing['subtotal']:.2f}",
+                },
+                "discount": {
+                    "currency_code": CURRENCY,
+                    "value": f"{pricing['discount_amount']:.2f}",
                 },
             },
-            "items": [{
-                "name": "Custom GPX 3D Map",
-                "quantity": str(item_count),
-                "unit_amount": {
-                    "currency_code": CURRENCY,
-                    "value": f"{GPX_MAP_PRICE:.2f}",
-                },
-                "category": "PHYSICAL_GOODS",
-            }],
+        },
+        "items": [{
+            "name": "Custom GPX 3D Map",
+            "quantity": str(item_count),
+            "unit_amount": {
+                "currency_code": CURRENCY,
+                "value": f"{GPX_MAP_PRICE:.2f}",
+            },
+            "category": "PHYSICAL_GOODS",
         }],
+    }
+
+    # Include shipping address if provided (helps avoid compliance blocks)
+    if shipping.get("name") and shipping.get("address_line_1"):
+        purchase_unit["shipping"] = {
+            "name": {"full_name": shipping["name"][:300]},
+            "address": {
+                "address_line_1": shipping.get("address_line_1", "")[:300],
+                "address_line_2": shipping.get("address_line_2", "")[:300],
+                "admin_area_2": shipping.get("city", "")[:120],
+                "postal_code": shipping.get("postal_code", "")[:60],
+                "country_code": "GB",
+            },
+        }
+
+    paypal_order = {
+        "intent": "CAPTURE",
+        "application_context": {
+            "shipping_preference": "SET_PROVIDED_ADDRESS" if shipping.get("name") else "NO_SHIPPING",
+            "user_action": "PAY_NOW",
+            "locale": "en-GB",
+        },
+        "purchase_units": [purchase_unit],
     }
 
     resp = http_requests.post(
