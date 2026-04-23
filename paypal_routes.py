@@ -28,6 +28,10 @@ CURRENCY = "GBP"
 DISCOUNTS = {
     "LAUNCH20": 20,
     "TOPO10": 10,
+    # LIVETEST97 — owner-only test code: 97.78% off -> £1 total per item.
+    # Used to validate the live PayPal flow end-to-end without sandbox.
+    # Remove once live testing is complete.
+    "LIVETEST97": 97.78,
 }
 
 # --- OAuth token cache ---
