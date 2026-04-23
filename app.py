@@ -88,12 +88,15 @@ def _run_generation(gpx_path, job_dir, stl_path, threemf_path):
     import subprocess
 
     # Generate 3MF — uses 256 grid for speed (OSM queries run in parallel via cli.py)
+    # --base-mm 8 raises the slab so the print sits further off the frame back,
+    # compensating for deeper frames. Terrain relief is unchanged.
     threemf_result = subprocess.run(
         [
             ROUTE2TILE_BIN,
             "--gpx", gpx_path,
             "--out", threemf_path,
             "--grid", "256",
+            "--base-mm", "8",
         ],
         cwd=job_dir,
         capture_output=True,
