@@ -208,6 +208,9 @@ def _send_order_email(order: dict, gpx_bytes: bytes, pdf_bytes: Optional[bytes])
     msg["To"] = NOTIFY_EMAIL
 
     order_id = order['order_id']
+    frame = (order.get('frame_color') or 'black').upper()
+    achieved_by = order.get('achieved_by') or '—'
+    dedication = order.get('dedication_message') or '—'
     body = f"""New TectonicMaps Order
 {'='*40}
 
@@ -215,6 +218,7 @@ Map Title:     {order['map_title']}
 Job ID:        {order.get('job_id', 'N/A')}
 Price:         £{order['price']}
 Discount:      {order.get('discount_code') or 'None'}
+Frame:         {frame}
 
 Customer:      {order['customer_name']}
 Email:         {order['customer_email']}
@@ -227,6 +231,10 @@ Shipping Address:
   {order['country']}
 
 Stats:         {order.get('stats', 'N/A')}
+
+Dedication:
+  Achieved By: {achieved_by}
+  Message:     {dedication}
 
 Order Date:    {order['order_date']}
 Order ID:      {order_id}
@@ -412,6 +420,9 @@ async def place_order(
     discount_code: str = Form(""),
     stats: str = Form(""),
     paypal_capture_id: str = Form(""),
+    frame_color: str = Form("black"),
+    achieved_by: str = Form(""),
+    dedication_message: str = Form(""),
     gpx_file: Optional[UploadFile] = File(None),
     pdf_file: Optional[UploadFile] = File(None),
 ):
@@ -420,11 +431,16 @@ async def place_order(
     if not EMAIL_RE.match(customer_email):
         raise HTTPException(400, "Invalid email address")
 
+    # Constrain frame_color to known options (UI offers black or white)
+    if frame_color not in ("black", "white"):
+        frame_color = "black"
+
     # Enforce field length limits
     for field_name, field_val in [
         ("customer_name", customer_name), ("map_title", map_title),
         ("address", address), ("city", city), ("postcode", postcode),
         ("country", country), ("discount_code", discount_code),
+        ("achieved_by", achieved_by), ("dedication_message", dedication_message),
     ]:
         if len(field_val) > MAX_FIELD_LEN:
             raise HTTPException(400, f"{field_name} too long (max {MAX_FIELD_LEN} chars)")
@@ -453,6 +469,9 @@ async def place_order(
         "discount_code": discount_code,
         "stats": stats,
         "paypal_capture_id": paypal_capture_id,
+        "frame_color": frame_color,
+        "achieved_by": achieved_by,
+        "dedication_message": dedication_message,
         "order_date": datetime.utcnow().isoformat(),
         "status": "received",
     }
